@@ -1,15 +1,24 @@
-# Stage 1: compile the Spring Boot executable JAR with Maven and Java 17.
-FROM maven:3.8-openjdk-17 AS build
-WORKDIR /workspace
-COPY pom.xml .
-RUN mvn -B -q dependency:go-offline
-COPY src ./src
-RUN mvn -B -DskipTests package
 
-# Stage 2: run only the packaged JAR in a smaller Java runtime image.
-FROM openjdk:17-slim AS runtime
+# Stage 1: Build the Spring Boot application inside Docker
+FROM maven:3.9-eclipse-temurin-17 AS build
+
 WORKDIR /app
+
+COPY pom.xml .
+RUN mvn -B dependency:go-offline
+
+COPY src ./src
+RUN mvn -B clean package -DskipTests
+
+# Stage 2: Run the application using Java 17
+FROM eclipse-temurin:17-jre-jammy AS runtime
+
+WORKDIR /app
+
+COPY --from=build /app/target/*.jar app.jar
+
 ENV SERVER_PORT=8080
-COPY --from=build /workspace/target/smart-clinic-management-system-1.0.0.jar app.jar
+
 EXPOSE 8080
-ENTRYPOINT ["java", "-XX:MaxRAMPercentage=75.0", "-jar", "/app/app.jar"]
+
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
