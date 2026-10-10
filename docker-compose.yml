@@ -1,0 +1,41 @@
+services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: cms
+      MYSQL_USER: cms
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cms-local-password-change-me}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root-local-password-change-me}
+    ports: ["3306:3306"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./src/main/resources/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+      - ./src/main/resources/data.sql:/docker-entrypoint-initdb.d/02-data.sql:ro
+      - ./src/main/resources/procedures.sql:/docker-entrypoint-initdb.d/03-procedures.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u root -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  mongo:
+    image: mongo:7
+    ports: ["27017:27017"]
+    volumes:
+      - mongo_data:/data/db
+      - ./mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+  app:
+    build: .
+    depends_on:
+      mysql: {condition: service_healthy}
+      mongo: {condition: service_started}
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/cms?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC
+      SPRING_DATASOURCE_USERNAME: cms
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_PASSWORD:-cms-local-password-change-me}
+      SPRING_DATA_MONGODB_URI: mongodb://mongo:27017/cms
+      CLINIC_JWT_SECRET: ${CLINIC_JWT_SECRET:-replace-this-local-demo-jwt-secret-key-123456}
+    ports: ["8080:8080"]
+volumes:
+  mysql_data:
+  mongo_data:
